@@ -1,0 +1,5 @@
+{
+  "name": "BananaViral",
+  "description": "A high-end SaaS using the Nano Banana Pro engine (Gemini 3) to generate viral, MrBeast-style YouTube and social media thumbnails.",
+  "requestFramePermissions": []
+}
