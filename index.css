@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+/* TAILWIND v4 CONFIGURATION 
+  We define variables here so they are instantly available for @apply.
+*/
+@theme {
+  /* Colors */
+  --color-brand-yellow: #FFE600;
+  --color-brand-black: #0A0A0A;
+  --color-brand-dark: #111111;
+  --color-brand-gray: #1A1A1A;
+  --color-brand-light: #FFFFFF;
+  --color-yt-red: #FF0000;
+
+  /* Fonts */
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Manrope', sans-serif;
+  --font-viral: 'Bebas Neue', sans-serif;
+  --font-arabic: 'Cairo', sans-serif;
+
+  /* Shadows */
+  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  --shadow-glow: 0 0 20px rgba(255, 230, 0, 0.4);
+  --shadow-sharp: 4px 4px 0px 0px rgba(0,0,0,1);
+
+  /* Animations */
+  --animate-pulse-fast: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Enable Class-Based Dark Mode 
+  This connects .dark class on HTML to the dark variant 
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Utilities */
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Base Styles */
+body {
+  /* Now text-brand-black exists because we defined --color-brand-black above */
+  @apply bg-white text-brand-black transition-colors duration-300 font-sans;
+}
+
+.dark body {
+  @apply bg-brand-black text-white;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent; 
+}
+::-webkit-scrollbar-thumb {
+  background: #ccc; 
+  border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #333;
+}
