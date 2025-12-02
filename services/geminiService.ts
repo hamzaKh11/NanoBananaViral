@@ -1,27 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
 import { Platform, Resolution, ThumbnailParams } from "../types";
 
+// STRICTLY ENFORCED: Nano Banana Pro Model
 const MODEL_NAME = 'gemini-3-pro-image-preview';
 
-/**
- * Ensures the user has selected a valid API Key.
- */
+// Helper to safely get the API key from Vite
+const getApiKey = (): string | undefined => {
+  return import.meta.env.VITE_GOOGLE_API_KEY;
+};
+
 export const ensureApiKey = async (): Promise<boolean> => {
-  const win = window as any;
-  if (win.aistudio) {
-    const hasKey = await win.aistudio.hasSelectedApiKey();
-    if (!hasKey) {
-      try {
-        await win.aistudio.openSelectKey();
-        return true;
-      } catch (e) {
-        console.error("User cancelled key selection", e);
-        return false;
-      }
-    }
-    return true;
-  }
-  return !!process.env.API_KEY;
+  const key = getApiKey();
+  return !!(key && key.length > 0);
 };
 
 const getAspectRatio = (platform: Platform): string => {
@@ -35,78 +25,81 @@ const getAspectRatio = (platform: Platform): string => {
 };
 
 /**
- * Generates the thumbnail using Gemini 3 Pro.
+ * Generates the thumbnail using the mandated 'gemini-3-pro-image-preview' model.
  */
 export const generateThumbnail = async (params: ThumbnailParams): Promise<string> => {
-  const hasKey = await ensureApiKey();
-  if (!hasKey) {
-    throw new Error("API Key selection is required.");
+  const apiKey = getApiKey();
+  
+  if (!apiKey) {
+    throw new Error("Missing API Key. Ensure VITE_GOOGLE_API_KEY is set in your .env file.");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Initialize the specific GenAI Client
+  const ai = new GoogleGenAI({ apiKey });
 
-  // Advanced Prompt Engineering for High CTR
-  const viralElements = [
-    "Hyper-expressive face in foreground",
-    "High contrast saturation",
-    "Complimentary color theory (Teal/Orange or Red/Green)",
-    "Thick glowing outlines around the subject",
-    "3D rendered background elements",
-    "Speed lines or motion blur on edges",
-    "Depth of field emphasizing the subject"
+  // --- 1. THE "BRUTAL FACE SWAP" PROMPT ---
+  const promptText = `
+    TASK: EXECUTE A FLAWLESS FACE SWAP.
+    
+    INSTRUCTIONS:
+    1.  **BASE IMAGE:** Use the provided "STYLE CLONE" image as the foundation. The composition, body, clothing, background, and lighting MUST be exactly the same.
+    2.  **FACE SOURCE:** Take the head/face from the provided "YOUR FACE" image.
+    3.  **THE SWAP:** REPLACE the head of the main subject in the BASE IMAGE with the face from the FACE SOURCE.
+    4.  **INTEGRATION:** The new face must perfectly match the lighting, shadows, skin tone, and angle of the original body. It must look 100% authentic.
+    5.  **TOPIC CONTEXT:** The overall vibe should relate to the topic: "${params.topic}".
+    6.  **INTENSITY:** ${params.intensity}% (Add extreme expressions or effects if >80%).
+
+    OUTPUT: A single, photorealistic image. Do not change the base image's style, only the subject's identity.
+  `;
+
+  // --- 2. PAYLOAD ASSEMBLY ---
+  const contents: any[] = [
+    { text: promptText }
   ];
 
-  const systemInstruction = `
-    You are the world's best YouTube Thumbnail Designer, known for creating viral images for MrBeast, Airrack, and Ryan Trahan.
-    Your goal is to create a high-CTR (Click Through Rate) image that stops the scroll immediately.
-    
-    CRITICAL RULES:
-    1. SUBJECT: If a face image is provided, integrate it seamlessly. If not, generate a hyper-realistic, expressive character (shocked, excited, or intense emotion).
-    2. LIGHTING: Use professional 3-point lighting with rim lights to separate subject from background.
-    3. COLORS: Use the "BananaViral" signature style: Vivid, punchy colors. Avoid dull grays or washed-out tones.
-    4. TEXT: If text is needed, keep it under 3 words, massive font, drop shadow, contrasting color.
-    5. STYLE: ${params.intensity > 80 ? "EXTREME CHAOS, MAX SATURATION, YELLING FACE" : "Clean, Professional, Intriguing, High-Budget"}.
-  `;
-
-  const enhancedPrompt = `
-    DESIGN TASK: Create a thumbnail for the video topic: "${params.topic}".
-    
-    PLATFORM: ${params.platform} (${getAspectRatio(params.platform)} aspect ratio).
-    
-    VISUAL REQUIREMENTS:
-    - ${viralElements.join("\n- ")}
-    - Make the image look like it cost $10,000 to produce.
-    - Resolution target: ${params.resolution}.
-    - Ensure any text generated is spelled correctly in English (or Arabic if the topic is Arabic).
-    
-    User Intensity Setting: ${params.intensity}% (0=Safe, 100=Viral Clickbait).
-  `;
-
-  // Build content parts
-  const parts: any[] = [{ text: enhancedPrompt }];
-  
+  // Inject Face (Identity) - MUST BE FIRST IMAGE
   if (params.faceImageBase64) {
     try {
-      const base64Data = params.faceImageBase64.split(',')[1];
-      const mimeType = params.faceImageBase64.substring(params.faceImageBase64.indexOf(':') + 1, params.faceImageBase64.indexOf(';'));
-      
-      parts.push({
+      const base64Data = params.faceImageBase64.includes('base64,') 
+        ? params.faceImageBase64.split('base64,')[1] 
+        : params.faceImageBase64;
+        
+      contents.push({
         inlineData: {
-          mimeType: mimeType,
-          data: base64Data
-        }
+          mimeType: "image/jpeg",
+          data: base64Data,
+        },
       });
     } catch (e) {
-      console.error("Error processing image", e);
+      console.warn("Face image processing error", e);
+    }
+  }
+
+  // Inject Style (Reference) - MUST BE SECOND IMAGE
+  if (params.styleImageBase64) {
+    try {
+      const base64Data = params.styleImageBase64.includes('base64,') 
+        ? params.styleImageBase64.split('base64,')[1] 
+        : params.styleImageBase64;
+
+      contents.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: base64Data,
+        },
+      });
+    } catch (e) {
+      console.warn("Style image processing error", e);
     }
   }
 
   try {
+    // --- 3. GENERATION CALL ---
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
-      contents: parts.length > 1 ? parts : enhancedPrompt,
+      contents: contents,
       config: {
-        systemInstruction: systemInstruction,
+        responseModalities: ['TEXT', 'IMAGE'],
         imageConfig: {
           aspectRatio: getAspectRatio(params.platform),
           imageSize: params.resolution
@@ -114,18 +107,30 @@ export const generateThumbnail = async (params: ThumbnailParams): Promise<string
       },
     });
 
-    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    if (part && part.inlineData) {
-      return `data:image/png;base64,${part.inlineData.data}`;
+    // --- 4. OUTPUT HANDLING ---
+    const candidates = response.candidates;
+    if (candidates && candidates.length > 0) {
+      const parts = candidates[0].content.parts;
+      
+      for (const part of parts) {
+        if (part.inlineData && part.inlineData.data) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
     }
-    
-    throw new Error("No image data received from the model.");
+
+    throw new Error("Model finished but returned no image data.");
 
   } catch (error: any) {
-    console.error("Thumbnail Generation Error:", error);
-    if (error.message?.includes("Requested entity was not found")) {
-      throw new Error("API Key session expired. Please refresh.");
+    console.error("Gemini 3 Pro Error:", error);
+    
+    if (error.message?.includes("API key")) {
+      throw new Error("Invalid VITE_GOOGLE_API_KEY.");
     }
-    throw error;
+    if (error.message?.includes("not found")) {
+      throw new Error(`Model '${MODEL_NAME}' is not accessible with this API key.`);
+    }
+    
+    throw new Error(error.message || "Generation Failed. Try a different prompt.");
   }
 };

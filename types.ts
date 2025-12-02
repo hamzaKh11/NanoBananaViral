@@ -16,7 +16,8 @@ export interface ThumbnailParams {
   platform: Platform;
   resolution: Resolution;
   intensity: number; // 0 to 100
-  faceImageBase64?: string | null; // New: Reference image for the face
+  faceImageBase64?: string | null; // User's face
+  styleImageBase64?: string | null; // New: Style reference image
 }
 
 export type PlanType = 'free' | 'starter' | 'creator' | 'agency' | 'pro';
