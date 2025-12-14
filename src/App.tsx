@@ -192,6 +192,8 @@ const App: React.FC = () => {
       } else {
         setUser(null);
         setCurrentView(View.Landing);
+
+        window.history.replaceState({}, "", "/");
       }
     });
 
